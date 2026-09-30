@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:5173"
     demo_mode: bool = False
     backend_host: str = "127.0.0.1"
-    backend_port: int = 8000
+    backend_port: int = 8001
     monitoring_thresholds: dict[str, float] = {
         "portfolio_value_change_percent": 5.0,
         "allocation_drift_percentage_points": 5.0,
