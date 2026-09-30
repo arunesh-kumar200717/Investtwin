@@ -1,0 +1,27 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+
+from app.api.errors import validation_exception_handler
+from app.api.router import api_router
+from app.api.v1.health import router as health_router
+from app.config.settings import get_settings
+
+settings = get_settings()
+
+app = FastAPI(
+    title="InvestTwin API",
+    description="Decision-support foundation for the InvestTwin application.",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_origin],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type"],
+)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.include_router(api_router)
+app.include_router(health_router)

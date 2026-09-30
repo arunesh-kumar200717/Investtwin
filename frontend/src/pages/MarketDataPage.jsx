@@ -1,0 +1,25 @@
+import { Search, Database, ExternalLink, CircleAlert, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import DataStatus from "../components/DataStatus";
+import { getDataSources, getMutualFunds, getStock } from "../services/api";
+
+const categories = [["stocks", "Stocks"], ["mutual_funds", "Mutual Funds"], ["gold", "Gold"], ["nps", "NPS"], ["bonds", "Bonds"], ["fd", "Fixed Deposits"], ["ppf", "PPF"]];
+
+export default function MarketDataPage() {
+  const [category, setCategory] = useState("stocks");
+  const [sources, setSources] = useState(null);
+  const [sourceError, setSourceError] = useState("");
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => { getDataSources().then(setSources).catch(() => setSourceError("Unable to load provider status.")); }, []);
+  const search = async (event) => { event.preventDefault(); if (!query.trim() || !["stocks", "mutual_funds"].includes(category)) return; setLoading(true); setError(""); setResult(null); try { setResult(category === "stocks" ? await getStock(query.trim()) : await getMutualFunds(query.trim())); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); } };
+  const selectedStatus = sources?.[category];
+  return <div className="market-page"><div className="dashboard-heading"><div><div className="eyebrow"><Database size={14} /> Verified data layer</div><h1>Market data.</h1><p>Explore provider-backed information with its source and freshness attached.</p></div></div><div className="market-layout"><aside className="market-categories"><span className="market-label">Asset categories</span>{categories.map(([value, label]) => <button key={value} className={category === value ? "market-category active" : "market-category"} onClick={() => { setCategory(value); setResult(null); setError(""); }}>{label}<span>{sources?.[value]?.status === "available" ? "Live" : ""}</span></button>)}</aside><section className="market-content"><div className="source-banner"><div><span className="market-label">Current source</span><strong>{selectedStatus?.source || "No provider configured"}</strong></div><DataStatus status={selectedStatus?.status || "loading"} message={selectedStatus?.message} /></div>{["stocks", "mutual_funds"].includes(category) ? <><form className="market-search" onSubmit={search}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={category === "stocks" ? "Search a symbol, e.g. IBM or RELIANCE.BSE" : "Search scheme name or AMFI scheme code"} /><button className="primary-button" type="submit" disabled={loading}><Search size={16} />{loading ? "Fetching..." : "Fetch live data"}</button></form>{error && <div className="market-error"><CircleAlert size={17} />{error}</div>}<MarketResult result={result} category={category} /></> : <UnavailableCategory category={category} message={selectedStatus?.message} />}</section></div><p className="market-footnote"><ExternalLink size={14} />Data is fetched by FastAPI providers. InvestTwin does not estimate, predict, or replace unavailable financial values.</p>{sourceError && <p className="market-footnote">{sourceError}</p>}</div>;
+}
+
+function MarketResult({ result, category }) { if (!result) return <div className="market-empty"><Database size={28} /><strong>Choose a symbol to begin</strong><span>Results will include the provider, timestamp, and data status.</span></div>; if (Array.isArray(result)) return <div className="fund-list">{result.map((item) => <MarketCard key={item.asset_id} item={item} />)}</div>; return <MarketCard item={result} category={category} />; }
+function MarketCard({ item, category }) { return <article className="market-card"><div className="market-card-top"><div><span className="market-label">{category === "mutual_funds" ? "AMFI scheme" : item.symbol}</span><h2>{item.name}</h2></div><DataStatus status={item.data_status} timestamp={item.timestamp} freshness={item.freshness} /></div><div className="market-value">{item.nav ? `₹${Number(item.nav).toLocaleString("en-IN")}` : item.price ? `${item.currency === "INR" ? "₹" : "$"}${Number(item.price).toLocaleString("en-IN")}` : "Value unavailable"}<small>{item.nav ? "Latest NAV" : "Latest provider quote"}</small></div><div className="market-meta"><span>Source <strong>{item.source}</strong></span><span>Updated <strong>{new Date(item.timestamp).toLocaleString()}</strong></span></div>{category === "stocks" && <Link className="text-link" to={`/dashboard/analysis/${encodeURIComponent(item.symbol)}`}>Open descriptive analysis <TrendingUp size={15} /></Link>}</article>; }
+function UnavailableCategory({ category, message }) { return <div className="category-unavailable"><CircleAlert size={28} /><h2>{categories.find(([value]) => value === category)?.[1]} data is unavailable</h2><p>{message || "No verified free live source is configured for this category."}</p><DataStatus status="unavailable" message="No replacement values will be generated." /></div>; }

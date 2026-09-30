@@ -1,0 +1,33 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+dist/
+build/
+npm-debug.log*
+
+# Local data
+data/cache/*
+data/uploads/*
+!data/cache/.gitkeep
+!data/uploads/.gitkeep
+
+# IDE and OS
+.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
