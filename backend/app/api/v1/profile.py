@@ -15,7 +15,12 @@ def repository(settings: Settings = Depends(get_settings)) -> Generator[ProfileR
     try:
         profiles = ProfileRepository(settings)
     except DatabaseUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="Profile storage is temporarily unavailable.") from exc
+        detail = (
+            "Profile storage is not configured. Set DATABASE_URL in the repository .env file."
+            if str(exc) == "DATABASE_URL is not configured"
+            else "Profile storage is temporarily unavailable."
+        )
+        raise HTTPException(status_code=503, detail=detail) from exc
     try:
         yield profiles
     finally:
@@ -41,7 +46,7 @@ def build_profile(payload: ProfileCreate, existing: dict | None = None) -> Profi
 def create_profile(payload: ProfileCreate, profiles: ProfileRepository = Depends(repository)) -> ProfileResponse:
     try:
         saved = build_profile(payload)
-        profiles.save(saved.model_dump(mode="python"))
+        profiles.save(saved.model_dump(mode="json"))
         return saved
     except DatabaseUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Profile storage is temporarily unavailable.") from exc

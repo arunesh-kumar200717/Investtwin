@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Activity, BarChart3, BrainCircuit, BriefcaseBusiness, CalendarDays, ChevronRight, CircleGauge, Database, Menu, ShieldCheck, UserRound, X, Zap, Presentation } from "lucide-react";
 import { useState } from "react";
 import Logo from "../components/Logo";
@@ -21,6 +21,8 @@ const navigation = [
 
 export default function AppShell({ healthState }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  const currentSection = navigation.find(([, path]) => path === location.pathname)?.[0] || "Overview";
   return (
     <div className="app-shell">
       <aside className={`sidebar ${menuOpen ? "sidebar-open" : ""}`}>
@@ -33,7 +35,7 @@ export default function AppShell({ healthState }) {
       </aside>
       {menuOpen && <button className="mobile-scrim" onClick={() => setMenuOpen(false)} aria-label="Close navigation" />}
       <main className="main-content">
-        <header className="topbar"><button className="icon-button menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>Overview</strong></div><div className="topbar-right"><HealthStatus state={healthState} /><div className="avatar">IT</div></div></header>
+        <header className="topbar"><button className="icon-button menu-trigger" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu size={20} /></button><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{currentSection}</strong></div><div className="topbar-right"><HealthStatus state={healthState} /><div className="avatar">IT</div></div></header>
         <div className="page-wrap"><Outlet /></div>
       </main>
     </div>

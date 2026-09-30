@@ -3,9 +3,11 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from uuid import uuid4
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.v1.monitoring import alert_service, monitoring_service
+from app.api.v1.profile import repository
 from app.ai.context_builder import build_investor_context
 from app.ai.provider import FallbackExplanationProvider
 from app.config.settings import Settings, get_settings
@@ -40,7 +42,7 @@ class FinalIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "service": "investtwin"})
 
-    def test_cors_allows_only_the_configured_local_frontend_origin(self):
+    def test_cors_allows_local_frontend_origins_and_denies_untrusted_origins(self):
         allowed = self.client.options("/api/v1/ai/status", headers={
             "Origin": "http://localhost:5173",
             "Access-Control-Request-Method": "GET",
@@ -49,6 +51,13 @@ class FinalIntegrationTests(unittest.TestCase):
         self.assertEqual(allowed.headers.get("access-control-allow-origin"), "http://localhost:5173")
         self.assertNotIn("access-control-allow-credentials", allowed.headers)
 
+        alternate_local = self.client.options("/api/v1/ai/status", headers={
+            "Origin": "http://localhost:5174",
+            "Access-Control-Request-Method": "POST",
+        })
+        self.assertEqual(alternate_local.status_code, 200)
+        self.assertEqual(alternate_local.headers.get("access-control-allow-origin"), "http://localhost:5174")
+
         denied = self.client.options("/api/v1/ai/status", headers={
             "Origin": "https://untrusted.invalid",
             "Access-Control-Request-Method": "GET",
@@ -56,6 +65,7 @@ class FinalIntegrationTests(unittest.TestCase):
         self.assertNotIn("access-control-allow-origin", denied.headers)
 
     def test_system_status_reports_components_without_credentials(self):
+        app.dependency_overrides[get_settings] = lambda: Settings(database_url=None)
         response = self.client.get("/api/v1/system/status")
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -67,6 +77,49 @@ class FinalIntegrationTests(unittest.TestCase):
         self.assertNotIn("mongodb://", str(body).lower())
         self.assertNotIn("mongodb+srv://", str(body).lower())
         self.assertNotIn("api_key", str(body).lower())
+
+    def test_profile_repository_reports_missing_database_configuration(self):
+        with self.assertRaises(HTTPException) as raised:
+            next(repository(Settings(database_url=None)))
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertIn("Set DATABASE_URL", raised.exception.detail)
+
+    def test_profile_create_serializes_target_date_for_storage(self):
+        class CapturingRepository:
+            document = None
+
+            def save(self, document):
+                self.document = document
+
+        profiles = CapturingRepository()
+        app.dependency_overrides[repository] = lambda: profiles
+        response = self.client.post("/api/v1/profile", json={
+            "user_id": f"profile-{uuid4()}",
+            "name": "Test Investor",
+            "age": 30,
+            "employment_status": "employed",
+            "monthly_income": 50000,
+            "monthly_contribution": 2000,
+            "investment": {
+                "initial_amount": 10000,
+                "horizon": "three_to_five",
+                "goal": "education",
+                "target_amount": 500000,
+                "target_date": "2036-05-17",
+            },
+            "risk_assessment": {
+                "temporary_loss": "hold",
+                "investment_time": "three_to_five",
+                "capital_protection": "important",
+                "value_fluctuations": "neutral",
+            },
+            "liquidity": {"emergency_fund_status": "yes", "coverage": "three_to_six"},
+            "existing_investments": [],
+            "preferred_categories": [],
+        })
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(profiles.document["investment"]["target_date"], "2036-05-17")
 
     def test_demo_reset_is_disabled_without_explicit_demo_setting(self):
         app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=False)
@@ -131,7 +184,7 @@ class FinalIntegrationTests(unittest.TestCase):
                 "demo-alert": {"user_id": "demo-investor"},
                 "real-alert": {"user_id": "real-user"},
             }
-            app.dependency_overrides[get_settings] = lambda: Settings(demo_mode=True)
+            app.dependency_overrides[get_settings] = lambda: Settings(database_url=None, demo_mode=True)
             response = self.client.post("/api/v1/demo/reset", json={})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["user_id"], "demo-investor")
